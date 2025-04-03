@@ -15,11 +15,13 @@ void setup() {
   DefineButtons();
 }
 void loop() {
-  ButtonPressed(1);
+  if(ButtonPressed(1)){
+    Serial.println("You pressed button 1");
+  }
 
 }
 //Functions
-//Function that checks if a button is pressed and released before returning True. buttonN corrosponds to button 1-4 on the board.Function must be looped while you are waiting for button input.
+//Function that checks if a button is pressed and released before returning True. buttonN corrosponds to button 1-4 on the board.
 bool ButtonPressed(int buttonN){
   int buttonNf;
   switch(buttonN){
@@ -37,9 +39,10 @@ bool ButtonPressed(int buttonN){
   break;  
   default:
   buttonNf =0;
+  Serial.println("Button assignment error, No button:" + String(buttonN));
   break;
   }
-  if(digitalRead(buttonNf)==LOW){
+  if((digitalRead(buttonNf)==LOW) && (buttonNf != 0)){
     while(true){
       //Serial.println("button " + String(buttonNf) + " pressed");
       if(digitalRead(buttonNf)==HIGH){
