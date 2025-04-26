@@ -1,3 +1,8 @@
+//Scanner for diagnostics
+#include "I2CScanner.h"
+I2CScanner scanner;
+  //scanner.Init();
+  //scanner.Scan();
 
 //RTC
 #include <RTClib.h>
@@ -29,13 +34,22 @@ void DefineButtons(){
 }
 
   
-  
+int DIRO = 7;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
 
 bool SetUpErrorFlag = false;
 
 void setup(){
+  scanner.Init();
+
   Serial.begin(9600);
+
   Serial.println();
+
+  //SDI-12
+  Serial1.begin(1200, SERIAL_7E1);//SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
+  pinMode(DIRO, OUTPUT);//DIRO Pin
+  digitalWrite(DIRO, HIGH);//lsiten
+
   Serial.println("--STARTING SENSOR COMMS ON I2C--");
   if (rtc.begin() == false) {
     Serial.println("RTC NOT CONNECTED");
@@ -73,8 +87,7 @@ void setup(){
   }
   DefineButtons();
   while(SetUpErrorFlag == true){
-    Serial.println("Setup Error");
-    delay(1000);
+    scanner.Scan();
   }
 }
 
@@ -84,6 +97,11 @@ void loop(){
   IMU.getAllData(&Omagn, &Ogyro, &Oaccel);
   if(ButtonPressed(1)){
     Serial.println("You pressed button 1");
+    SDI12send("abc");
+  }
+  if(ButtonPressed(2)){
+    Serial.println("You pressed button 2");
+    Serial.println(SDI12receive());
   }
 }
 //Functions
@@ -110,4 +128,21 @@ bool ButtonPressed(int buttonN){
     return false;
     }
   }
+}
+
+void SDI12send(String str){
+  digitalWrite(DIRO, LOW);//Send
+  Serial1.println(str);
+  delay(200);
+  Serial1.flush();
+  SDI12receive();
+}
+String SDI12receive(){
+  digitalWrite(DIRO, HIGH);//Receive
+  String output;
+  while(Serial1.available()){
+    char c = Serial1.read();
+    output+=c;
+  }
+  return output;
 }
