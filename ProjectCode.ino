@@ -1,6 +1,3 @@
-//Constants
-
-
 //Setup & Defining functions
 void DefineButtons(){
   pinMode(2, INPUT_PULLUP);
@@ -10,8 +7,12 @@ void DefineButtons(){
   Serial.println("Buttons Defined");
 }
 
+//Header File with Eng_Sensor class
+#include "ENG_Sensors.h"
+
 void setup() {
   Serial.begin(9600);
+  ENG_Sensors Sensors; //Must be initialised after Serial.begin and in SetUP()
   DefineButtons();
 }
 void loop() {
