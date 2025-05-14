@@ -39,56 +39,9 @@ int DIRO = 7;//pin that controls the input/output state SDI adaptor. HIGH receiv
 bool SetUpErrorFlag = false;
 
 void setup(){
-  scanner.Init();
-
-  Serial.begin(9600);
-
-  Serial.println();
-
-  //SDI-12
-  Serial1.begin(1200, SERIAL_7E1);//SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
-  pinMode(DIRO, OUTPUT);//DIRO Pin
-  digitalWrite(DIRO, HIGH);//lsiten
-
-  Serial.println("--STARTING SENSOR COMMS ON I2C--");
-  if (rtc.begin() == false) {
-    Serial.println("RTC NOT CONNECTED");
-    SetUpErrorFlag = true;
-  }
-  else{
-    Serial.println("RTC CONNECTED");
-    rtc.adjust(DateTime(2025,4,26,0,0,0));
-  }
-  if (IMU.begin() == false) {  
-    Serial.println("IMU NOT CONNECTED");    
-    SetUpErrorFlag = true;
-  }
-  else{
-    Serial.println("IMU CONNECTED");
-  }
-  if (DLDR.begin(BH1750_TO_GROUND) == false) {
-    Serial.println("DLDR NOT CONNECTED");
-    SetUpErrorFlag = true;
-  }
-  else{
-    Serial.println("DLDR CONNECTED");
-  }
-  if (AQS.begin(0x76) == false) {
-    Serial.println("AQS NOT CONNECTED");
-    SetUpErrorFlag = true;
-  }
-  else{
-    Serial.println("AQS CONNECTED");
-    AQS.setTemperatureOversampling(BME680_OS_8X);
-    AQS.setHumidityOversampling(BME680_OS_2X);
-    AQS.setPressureOversampling(BME680_OS_4X);
-    AQS.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    AQS.setGasHeater(320, 150);  // 320*C for 150 ms
-  }
+  SetupSensors();
+  SetupSDI12();
   DefineButtons();
-  while(SetUpErrorFlag == true){
-    scanner.Scan();
-  }
 }
 
 
@@ -140,9 +93,59 @@ void SDI12send(String str){
 String SDI12receive(){
   digitalWrite(DIRO, HIGH);//Receive
   String output;
+  Serial1.read(); // Remove first dead char
   while(Serial1.available()){
     char c = Serial1.read();
     output+=c;
   }
   return output;
+}
+void SetupSensors(){
+  scanner.Init();
+  Serial.begin(9600);
+  Serial.println();
+  Serial.println("--STARTING SENSOR COMMS ON I2C--");
+  if (rtc.begin() == false) {
+    Serial.println("RTC NOT CONNECTED");
+    SetUpErrorFlag = true;
+  }
+  else{
+    Serial.println("RTC CONNECTED");
+    rtc.adjust(DateTime(2025,4,26,0,0,0));
+  }
+  if (IMU.begin() == false) {  
+    Serial.println("IMU NOT CONNECTED");    
+    SetUpErrorFlag = true;
+  }
+  else{
+    Serial.println("IMU CONNECTED");
+  }
+  if (DLDR.begin(BH1750_TO_GROUND) == false) {
+    Serial.println("DLDR NOT CONNECTED");
+    SetUpErrorFlag = true;
+  }
+  else{
+    Serial.println("DLDR CONNECTED");
+  }
+  if (AQS.begin(0x76) == false) {
+    Serial.println("AQS NOT CONNECTED");
+    SetUpErrorFlag = true;
+  }
+  else{
+    Serial.println("AQS CONNECTED");
+    AQS.setTemperatureOversampling(BME680_OS_8X);
+    AQS.setHumidityOversampling(BME680_OS_2X);
+    AQS.setPressureOversampling(BME680_OS_4X);
+    AQS.setIIRFilterSize(BME680_FILTER_SIZE_3);
+    AQS.setGasHeater(320, 150);  // 320*C for 150 ms
+  }
+  while(SetUpErrorFlag == true){
+    scanner.Scan();
+  }
+}
+void SetupSDI12(){
+  //SDI-12
+  Serial1.begin(1200, SERIAL_7E1);//SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
+  pinMode(DIRO, OUTPUT);//DIRO Pin
+  digitalWrite(DIRO, HIGH);//lsiten
 }
