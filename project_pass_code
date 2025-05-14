@@ -1,0 +1,138 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME680.h>
+#include <BH1750.h>
+#include <SPI.h>
+
+//BME680 Setup
+Adafruit_BME680 bme;
+//BH1750 Setup
+BH1750 lightMeter(0x23);
+//SDI-12 Setup
+
+#define DIRO 7
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+String command;
+int deviceAddress = 0; // default address for project
+String deviceIdentification = "014ENG20009123456789";
+
+void setup() {
+  //Arduino IDE Serial Monitor
+  Serial.begin(9600);
+  // ================ BME680 ================
+  if (!bme.begin(0x76)) {
+    Serial.println("Could not find a valid BME680 sensor, check wiring!");
+    while (1);
+  }
+    // Set the temperature, pressure and humidity oversampling
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setPressureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_2X);
+  bme.setIIRFilterSize(BME680_FILTER_SIZE_3);//
+  bme.setGasHeater(320, 150);//
+  // ================ BH1750 ================
+  Wire.begin();
+  lightMeter.begin();
+  // ================ SDI-12 ================
+  Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
+  pinMode(DIRO, OUTPUT);               //DIRO Pin
+  //HIGH to Receive from SDI-12
+  digitalWrite(DIRO, HIGH);
+}
+
+
+void loop() {
+  int byte;
+  //Receive SDI-12 over UART and then print to Serial Monitor
+  if(Serial1.available()) {
+    byte = Serial1.read();        //Reads incoming communication in bytes
+    //Serial.println(byte);
+    if (byte == 33) {             //If byte is command terminator (!)
+      SDI12Receive(command);
+      command = "";               //reset command string
+    } else {
+      if (byte != 0) {            //do not add start bit (0)
+      command += char(byte);      //append byte to command string
+      }
+    }
+  }
+}
+
+
+void SDI12Receive(String input) {
+  //convert device address to string
+  String address =  String(deviceAddress);
+  //Determines if the command is addressed for this device
+  if((String(input.charAt(0)) == "?")){                //address query command
+      SDI12Send("?");
+      Serial.println("Address: " + address);
+    }
+  if (String(input.charAt(0)) == address) {  
+    if((String(input.charAt(1)) == "A")){   // change address command
+      deviceAddress = input.charAt(2);
+      Serial.println("New address = " + deviceAddress);
+    }
+
+    if((String(input.charAt(1)) == "M")){  // start measurement command
+        SDI12Send("M");
+        String response = "";
+        while (Serial1.available()) {
+        uint16_t x = Serial1.read();
+        response += x;
+        }
+        Serial.println("Response: ");
+        Serial.println(response);
+
+    }
+    if((String(input.charAt(1)) == "D")){  // send data command
+      if((String(input.charAt(2)) == "1")){  //bme sensor
+      float temp = bme.temperature;
+      float Ps = bme.pressure;
+      float hum = bme.humidity;
+      float gas = bme.gas_resistance/1000;
+      String data_1 = deviceAddress + String(temp) + String(Ps) + String(hum) + String(gas);
+      Serial.println(data_1);
+    } 
+    if((String(input.charAt(2)) == "2")){  // light sensor
+      float lux = lightMeter.readLightLevel();
+      String data_2 = deviceAddress + String(lux);
+      Serial.println(data_2);
+    }
+    }
+    if(String(input.charAt(1)) == "I"){   // Send Identification command
+      SDI12Send(deviceIdentification);
+    }
+
+    if((String(input.charAt(1)) == "R") && (String(input.charAt(2))) == "0"){  // Continuous Measurements 
+      bme.performReading(); // 
+      float T = bme.temperature;
+      float P = bme.pressure;
+      float H = bme.humidity;
+      float G = bme.gas_resistance/1000.0;  //gas in kilOhms
+      float lux = lightMeter.readLightLevel();
+// format exactly: a + T + P + H + G + lux
+      String msg = address
+                   + "+" + String(T,  2)
+                   + "+" + String(P,  2)
+                   + "+" + String(H,  2)
+                   + "+" + String(G,  2)
+                   + "+" + String(lux,2);
+      SDI12Send(msg);
+      
+    }
+  }  
+}
+
+void SDI12Send(String message) {
+  Serial.print("message: "); Serial.println(message);
+  
+  digitalWrite(DIRO, LOW);
+  delay(100);
+  Serial1.print(message + String("\r\n"));
+  Serial1.flush();    //wait for print to finish
+  Serial1.end();
+  Serial1.begin(1200, SERIAL_7E1);
+  digitalWrite(DIRO, HIGH);
+  //secondruntoken = 0;
+}
