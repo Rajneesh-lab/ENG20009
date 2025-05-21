@@ -18,11 +18,10 @@ sBmx160SensorData_t Omagn, Ogyro, Oaccel;
 #include <hp_BH1750.h>
 hp_BH1750 DLDR;
 
-//BME BME680
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME680.h>
-#define SEALEVELPRESSURE_HPA (1013.25);
-Adafruit_BME680 AQS;
+//BME BME280
+#include <Adafruit_BME280.h>
+Adafruit_BME280 BME;
+#define SeaLevel_HPA (1013.25)
 
 //Button Pin allocation:
 void DefineButtons(){
@@ -127,20 +126,16 @@ void SetupSensors(){
   else{
     Serial.println("DLDR CONNECTED");
   }
-  if (AQS.begin(0x76) == false) {
-    Serial.println("AQS NOT CONNECTED");
+  if (BME.begin(0x76) == false) {
+    Serial.println("BME NOT CONNECTED");
     SetUpErrorFlag = true;
   }
   else{
-    Serial.println("AQS CONNECTED");
-    AQS.setTemperatureOversampling(BME680_OS_8X);
-    AQS.setHumidityOversampling(BME680_OS_2X);
-    AQS.setPressureOversampling(BME680_OS_4X);
-    AQS.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    AQS.setGasHeater(320, 150);  // 320*C for 150 ms
+    Serial.println("BME CONNECTED");
   }
   while(SetUpErrorFlag == true){
-    scanner.Scan();
+    scanner.Scan(); //Debugging Loop
+    delay(1000);
   }
 }
 void SetupSDI12(){
