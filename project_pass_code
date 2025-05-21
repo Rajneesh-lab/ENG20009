@@ -14,7 +14,8 @@ BH1750 lightMeter(0x23);
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 String command;
-int deviceAddress = 0; // default address for project
+int deviceAddress = '0'; // default address for project
+
 String deviceIdentification = "014ENG20009123456789";
 
 void setup() {
@@ -61,43 +62,29 @@ void loop() {
 
 
 void SDI12Receive(String input) {
-  //convert device address to string
-  String address =  String(deviceAddress);
-  //Determines if the command is addressed for this device
-  if((String(input.charAt(0)) == "?")){                //address query command
-      SDI12Send("?");
-      Serial.println("Address: " + address);
-    }
+
+  String address =  String(deviceAddress); 
+  
+   if((String(input.charAt(0)) == "?")){      //Determines if the command is addressed for this device
+    address_query(address);
+   }                                 //address query command
   if (String(input.charAt(0)) == address) {  
+
     if((String(input.charAt(1)) == "A")){   // change address command
-      deviceAddress = input.charAt(2);
-      Serial.println("New address = " + deviceAddress);
+      String newAddress = String(input.charAt(2)); 
+      change_address(newAddress);
     }
 
     if((String(input.charAt(1)) == "M")){  // start measurement command
-        SDI12Send("M");
-        String response = "";
-        while (Serial1.available()) {
-        uint16_t x = Serial1.read();
-        response += x;
-        }
-        Serial.println("Response: ");
-        Serial.println(response);
-
+       start_measurement("M");
     }
+
     if((String(input.charAt(1)) == "D")){  // send data command
       if((String(input.charAt(2)) == "1")){  //bme sensor
-      float temp = bme.temperature;
-      float Ps = bme.pressure;
-      float hum = bme.humidity;
-      float gas = bme.gas_resistance/1000;
-      String data_1 = deviceAddress + String(temp) + String(Ps) + String(hum) + String(gas);
-      Serial.println(data_1);
-    } 
-    if((String(input.charAt(2)) == "2")){  // light sensor
-      float lux = lightMeter.readLightLevel();
-      String data_2 = deviceAddress + String(lux);
-      Serial.println(data_2);
+      bme_sensor_send_data();
+      } 
+      if((String(input.charAt(2)) == "2")){  // light sensor
+      light_sensor_send_data();
     }
     }
     if(String(input.charAt(1)) == "I"){   // Send Identification command
@@ -105,21 +92,7 @@ void SDI12Receive(String input) {
     }
 
     if((String(input.charAt(1)) == "R") && (String(input.charAt(2))) == "0"){  // Continuous Measurements 
-      bme.performReading(); // 
-      float T = bme.temperature;
-      float P = bme.pressure;
-      float H = bme.humidity;
-      float G = bme.gas_resistance/1000.0;  //gas in kilOhms
-      float lux = lightMeter.readLightLevel();
-// format exactly: a + T + P + H + G + lux
-      String msg = address
-                   + "+" + String(T,  2)
-                   + "+" + String(P,  2)
-                   + "+" + String(H,  2)
-                   + "+" + String(G,  2)
-                   + "+" + String(lux,2);
-      SDI12Send(msg);
-      
+      continuous_measurements(address);
     }
   }  
 }
@@ -135,4 +108,56 @@ void SDI12Send(String message) {
   Serial1.begin(1200, SERIAL_7E1);
   digitalWrite(DIRO, HIGH);
   //secondruntoken = 0;
+}
+
+void address_query(String address){
+    SDI12Send("?");
+    Serial.println("Address: " + address);
+  }
+
+void change_address(String newAddress){
+  Serial.println("New address = " + newAddress);
+  newAddress.toInt() == deviceAddress;
+}
+
+void start_measurement(String character){
+    SDI12Send(character);
+    String response = "";
+    while (Serial1.available()) {
+    uint16_t x = Serial1.read();
+    response += x;
+    }
+    Serial.println("Response: ");
+    Serial.println(response);
+}
+void bme_sensor_send_data(){
+  float temp = bme.temperature;
+  float Ps = bme.pressure;
+  float hum = bme.humidity;
+  float gas = bme.gas_resistance/1000;
+  String data_1 = deviceAddress + "+" + String(temp) + "+" + String(Ps) + "+" + String(hum) + "+" + String(gas);
+  Serial.println(data_1);
+}
+
+void light_sensor_send_data(){
+   float lux = lightMeter.readLightLevel();
+   String data_2 = deviceAddress + String(lux);
+   Serial.println(data_2);
+}
+
+void continuous_measurements(String address){
+      bme.performReading(); // 
+      float T = bme.temperature;
+      float P = bme.pressure;
+      float H = bme.humidity;
+      float G = bme.gas_resistance/1000.0;  //gas in kilOhms
+      float lux = lightMeter.readLightLevel();
+// format exactly: a + T + P + H + G + lux
+      String msg = address
+                   + "+" + String(T,  2)
+                   + "+" + String(P,  2)
+                   + "+" + String(H,  2)
+                   + "+" + String(G,  2)
+                   + "+" + String(lux,2);
+      SDI12Send(msg);
 }
