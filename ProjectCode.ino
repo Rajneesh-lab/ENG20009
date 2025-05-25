@@ -43,7 +43,7 @@ void DefineButtons(){
   pinMode(3, INPUT_PULLUP);
   pinMode(4, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
-  Serial.println("BUTTON PINS ALLOCATED");
+  Serial.println("--Button Pins Allocated--");
 }
 
   
@@ -54,10 +54,11 @@ bool SetUpErrorFlag = false;
 void setup(){
   Serial.begin(9600);
   Wire.begin();
-  SetupLCD();
   SetupSensors();
   SetupSDI12();
   DefineButtons();
+  SetupLCD();
+  Serial.println("--SetUp Complete");
 }
 
 
@@ -258,5 +259,5 @@ void SetupLCD(){
   tft.initR(INITR_BLACKTAB);
   tft.setRotation(3);
   tft.fillScreen(ST77XX_BLACK);
-  Serial.print("LCD SetUp");
+  Serial.println("--LCD SetUp Complete--");
 }
