@@ -14,6 +14,28 @@ I2CScanner scanner;
 #include <SPI.h>
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
+//Menu Variable
+int currentMenu = 0;
+int selectedMenu = 1;
+bool menuInitialized[8] = {false};
+bool mainMenuInitialized = false;
+
+int graphX = 0;
+unsigned long lastGraphUpdate = 0;
+const unsigned long graphInterval = 50;
+
+String MenuText[] = {
+  "",
+  "Accelerometer",
+  "Gyroscope",
+  "Magnetometer",
+  "Light",
+  "Temperature",
+  "Pressure",
+  "Altitude",
+  "Humidity"
+};
+
 
 //I2C bus
 #include <Wire.h>
@@ -63,13 +85,7 @@ void setup(){
 
 
 void loop(){
-  if(ButtonPressed(1)){
-    ReadAll();
-  }
-  if(ButtonPressed(2)){
-    Serial.println("You pressed button 2");
-    Serial.println(SDI12receive());
-  }
+  PollMenu();
 }
 //Functions
 
@@ -147,10 +163,12 @@ void SetupSensors(){
   else{
     Serial.println("BME CONNECTED");
   }
+  /*
   while(SetUpErrorFlag == true){
     scanner.Scan(); //Debugging Loop
     delay(1000);
   }
+  */
 
 }
 
@@ -260,4 +278,188 @@ void SetupLCD(){
   tft.setRotation(3);
   tft.fillScreen(ST77XX_BLACK);
   Serial.println("--LCD SetUp Complete--");
+}
+
+void PollMenu(){
+  if (currentMenu == 0){
+    showMainMenu();
+    checkMainMenuButtons();
+  }
+  else{
+    if (millis() - lastGraphUpdate >= graphInterval) {
+      lastGraphUpdate = millis();
+      showSensorGraph(currentMenu);
+    }
+  }
+}
+
+
+void showSensorGraph(int type){
+  int x = 0, y = 0, z = 0;
+  //maps raw readings and transforms them into dispalayable coordiantes
+  if (type == 1) {
+    x = map(ReadAccelerationX(), -14, 14, 120, 10);//set graph coords
+    y = map(ReadAccelerationY(), -14, 14, 120, 10);//set graph coords
+    z = map(ReadAccelerationZ(), -14, 14, 120, 10);//set graph coords
+  } 
+  else if (type == 2) {
+    x = map(ReadGyrometerX(), -50, 50, 120, 10);//set graph coords
+    y = map(ReadGyrometerY(), -50, 50, 120, 10);//set graph coords
+    z = map(ReadGyrometerZ(), -50, 50, 120, 10);//set graph coords
+  } 
+  else if (type == 3) {
+    x = map(ReadMagnetometerX(), -350, 350, 120, 10);//set graph coords
+    y = map(ReadMagnetometerY(), -350, 350, 120, 10);//set graph coords
+    z = map(ReadMagnetometerZ(), -350, 350, 120, 10);//set graph coords
+  } 
+  else if (type == 4) {
+    Serial.print(ReadLux());
+    int lux = map(ReadLux(), 0, 600, 120, 20);
+    x = lux;//set graph coords
+    y = lux;
+    z = lux;
+  } 
+  else if (type == 5) {
+    int temp = map(ReadTemperature(), -50, 50, 120, 20);//set graph coords
+    x = temp;
+    y = temp;
+    z = temp;
+  } 
+  else if (type == 6) {
+    int press = map(ReadPressure(), 1000, 1100, 120, 20);//set graph coords
+    x = press;
+    y = press;
+    z = press;
+  } 
+  else if (type == 7) {
+    int alt = map(ReadAltitude(), -200, 200, 120, 20);//set graph coords
+    x = alt;
+    y = alt;
+    z = alt;
+  } 
+  else if (type == 8) {
+    int humid = map(ReadHumidity(), 0, 100, 120, 20);
+    x = humid;
+    y = humid;
+    z = humid;
+  }
+
+  if (!menuInitialized[type]) {
+    tft.fillScreen(ST77XX_BLACK);
+    tft.setCursor(10, 5);
+    tft.setTextColor(ST77XX_CYAN);
+    tft.setTextSize(1);
+    switch (type) {
+      case 1: tft.print("Accelerometer Graph"); break;
+      case 2: tft.print("Gyroscope Graph"); break;
+      case 3: tft.print("Magnetometer Graph"); break;
+      case 4: tft.print("Light Graph"); break;
+      case 5: tft.print("Temperature Graph"); break;
+      case 6: tft.print("Pressure Graph"); break;
+      case 7: tft.print("Altitude Graph"); break;
+      case 8: tft.print("Humidity Graph"); break;
+    }
+    menuInitialized[type] = true;
+  }
+  //print labels 
+  if (graphX >= 160) {
+    tft.fillScreen(ST77XX_BLACK);
+    tft.setCursor(10, 5);
+    tft.setTextColor(ST77XX_CYAN);
+    tft.setTextSize(1);
+    switch (type) {
+      case 1: tft.print("Accelerometer Graph"); break;
+      case 2: tft.print("Gyroscope Graph"); break;
+      case 3: tft.print("Magnetometer Graph"); break;
+      case 4: tft.print("Light Graph"); break;
+      case 5: tft.print("Temperature Graph"); break;
+      case 6: tft.print("Pressure Graph"); break;
+      case 7: tft.print("Altitude Graph"); break;
+      case 8: tft.print("Humidity Graph"); break;
+    }
+    graphX = 0;
+  }
+
+  tft.drawPixel(graphX, x, ST77XX_RED);
+  tft.drawPixel(graphX, y, ST77XX_GREEN);
+  tft.drawPixel(graphX, z, ST77XX_BLUE);
+  graphX++;
+
+  if (ButtonPressed(4)) {
+    currentMenu = 0;
+    resetMenus();
+    tft.fillScreen(ST77XX_BLACK);
+  }
+}  
+void checkMainMenuButtons() {
+  if (ButtonPressed(2)) {
+    selectedMenu--; //goes down a menu
+    if (selectedMenu < 1) selectedMenu = 8; //loops back around
+    mainMenuInitialized = false; //forced redraws
+  } else if (ButtonPressed(1)) {
+    selectedMenu++;
+    if (selectedMenu > 8) selectedMenu = 1;
+    mainMenuInitialized = false;
+  }
+  else if (ButtonPressed(3)) {
+    currentMenu = selectedMenu;
+    resetMenus();
+    tft.fillScreen(ST77XX_BLACK);
+  }
+}
+
+
+void showMainMenu(){
+  if (!mainMenuInitialized) {
+    //Only blacks out the text making it faster than fill
+    tft.setTextSize(1);
+    tft.setCursor(3, 30);
+    for (int i = 1; i <= 8; i++) {
+      tft.setCursor(3, tft.getCursorY()); // offsets all new lines by 3ppx
+      if (i == selectedMenu + 1) {
+        tft.setTextColor(ST77XX_WHITE);
+        tft.println(MenuText[i]); // cycles through predetermined names of the menus stored in a array
+        tft.setCursor(3, tft.getCursorY()+3); // adds padding in between lines
+      }
+      else if (i == selectedMenu - 1) {
+        tft.setTextColor(ST77XX_WHITE);
+        tft.println(MenuText[i]); // cycles through predetermined names of the menus stored in a array
+        tft.setCursor(3, tft.getCursorY()+3); // adds padding in between lines
+      } 
+      else {
+        tft.setTextColor(ST77XX_WHITE);
+        tft.println(""); // cycles through predetermined names of the menus stored in a array
+        tft.setCursor(3, tft.getCursorY()+3); // adds padding in between lines
+      }
+      
+    }
+
+
+
+    tft.setCursor(10, 10);
+    tft.setTextColor(ST77XX_YELLOW);
+    tft.setTextSize(2);
+    tft.println("Main Menu");
+
+    tft.setTextSize(1);
+    tft.setCursor(3, 30);
+    for (int i = 1; i <= 8; i++) {
+      tft.setCursor(3, tft.getCursorY()); // offsets all new lines by 3ppx
+      if (i == selectedMenu) {
+        tft.setTextColor(ST77XX_GREEN);
+      } else {
+        tft.setTextColor(ST77XX_WHITE);
+      }
+      tft.println(MenuText[i]); // cycles through predetermined names of the menus stored in a array
+      tft.setCursor(3, tft.getCursorY()+3); // adds padding in between lines
+    }
+    mainMenuInitialized = true;
+  }
+}
+
+void resetMenus(){
+  mainMenuInitialized = false;
+  for (int i = 0; i < 8; i++) {
+    menuInitialized[i] = false;
+  }
 }
