@@ -66,6 +66,8 @@ void DefineButtons(){
   pinMode(4, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
   Serial.println("--Button Pins Allocated--");
+  pinMode(53, INPUT_PULLUP);//Logger vs SDI mode switch
+  
 }
 
   
@@ -85,9 +87,18 @@ void setup(){
 
 
 void loop(){
-  PollMenu();
+  if(DataLoggerMode()){
+    PollMenu();
+  }
+  else{
+
+
+  }
 }
 //Functions
+bool DataLoggerMode(){
+  return digitalRead(53);
+}
 
 //Function that checks if a button is pressed and released before returning True. buttonN corrosponds to button 1-4 on the board.
 //BLOCKING!!
@@ -314,7 +325,7 @@ void showSensorGraph(int type){
   } 
   else if (type == 4) {
     Serial.print(ReadLux());
-    int lux = map(ReadLux(), 0, 600, 120, 20);
+    int lux = map(ReadLux(), 0, 1000, 120, 20);
     x = lux;//set graph coords
     y = lux;
     z = lux;
