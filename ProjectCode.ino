@@ -36,6 +36,7 @@ String MenuText[] = {
   "Humidity"
 };
 
+//ModeChange
 
 //I2C bus
 #include <Wire.h>
@@ -91,8 +92,6 @@ void loop(){
     PollMenu();
   }
   else{
-
-
   }
 }
 //Functions
