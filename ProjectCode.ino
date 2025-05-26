@@ -10,15 +10,26 @@
 AccelStepper stepper = AccelStepper(MotorInterfaceType, MP1, MP3, MP2, MP4);//Define the pin sequence (IN1-IN3-IN2-IN4)
 const int SPR = 2048;//Steps per revolution
 
+//SD
+
 //Scanner for diagnostics
 #include "I2CScanner.h"
 I2CScanner scanner;
 
 //SDI
 String command;
-String deviceAddress = '0'; // default address for project
+String deviceAddress = "0"; // default address for project
 String deviceIdentification = "014ENG20009123456789";
 int DIRO = 9;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
+String T; //Temp
+String P; //pressure
+String A; //Altitude
+String H; //humidity
+String L;
+String Amag;
+String Gmag;
+String Mmag;
+
 
 //LCD PINS
 #define TFT_CS    10
@@ -63,6 +74,9 @@ String MenuText[] = {
 RTC_DS1307 rtc;
 DateTime now;
 
+//Stepper
+bool TimerFlag = true;
+
 //IMU
 #include <DFRobot_BMX160.h>
 DFRobot_BMX160 IMU;
@@ -88,9 +102,6 @@ void DefineButtons(){
   
 }
 
-  
-
-
 bool SetUpErrorFlag = false;
 
 void setup(){
@@ -102,25 +113,29 @@ void setup(){
   StepperSetup();
   SetupLCD();
   Serial.println("--SetUp Complete");
+  InteruptSetup();
 }
 
 
 void loop(){
+  delay(100);
   TimerFlagHandler();
   if(DataLoggerMode()){
     PollMenu();
   }
   else{
-    if(ButtonPressed(1)){
-      ToggleStepper();
     }
-  }
 }
 //Functions
+
+void TC3_Handler(){
+  TC_GetStatus(TC1, 0);
+  TimerFlag = true;
+}
 void TimerFlagHandler(){
   if(TimerFlag){
     TimerFlag = false;
-    if(ReadHumidity()>60){
+    if(ReadHumidity()<60){
     OpenStepper();
     }
     else{
@@ -150,15 +165,11 @@ void InteruptSetup(){
   TC1->TC_CHANNEL[0].TC_IER=  TC_IER_CPCS | TC_IER_CPAS; //interupt enable register
   TC1->TC_CHANNEL[0].TC_IDR=~(TC_IER_CPCS | TC_IER_CPAS); //interupt disable register
   NVIC_EnableIRQ(TC3_IRQn); //enable innterupt handler
-
+}
 void StepperSetup(){
   stepper.setMaxSpeed(1000);//Set the maximum motor speed in steps per second
   stepper.setAcceleration(200);//Set the maximum acceleration in steps per second^2
   Serial.println("--Stepper SetUp--");
-}
-void ToggleStepper(){
-  stepper.move(0.5*SPR); //Set the target motor position (i.e. turn motor for 3 full revolutions)
-  stepper.runToPosition(); // Run the motor to the target position 
 }
 
 bool DataLoggerMode(){
@@ -553,55 +564,43 @@ void SDI12Receive(String input) {
     address_query(address);
   }                                 //address query command
   if (String(input.charAt(0)) == address) {  
-
     if((String(input.charAt(1)) == "A")){   // change address command
       String newAddress = String(input.charAt(2)); 
       change_address(newAddress);
     }
-
     if((String(input.charAt(1)) == "M")){  // start measurement command
-       SDI12Send("M00028");
-       switch(input.charAt(2)){
-         case 0
-        start_measurement_mcu();
-           break;
-         case 1
-        start_measurement_bme();
-           break;
-         case 2;
-        start_measurement_lux();
-         break;
-       } 
-    }
+    SDI12Send("M00028");
+    StartMeasurement();
+  }
 
-    if((String(input.charAt(1)) == "D")){  // send data command
-      switch(input.charAt(2)){
-        case 0:
-         mcu_sensor_send_data(); //Acceleration
-          break;
-        case 1:
-         bme_sensor_send_data(); //BME
-          break;
-        case 2:
-         lux_send_data(); //LUX
-          break;
+  if((String(input.charAt(1)) == "D")){  // send data command
+    switch(input.charAt(2)){
+      case 0:
+        SDI12Send(Amag + "+" + Mmag + "+" + Gmag);
+        break;
+      case 1:
+        SDI12Send(T + "+" + P + "+" + A + "+" + H);
+        break;
+      case 2:
+        SDI12Send(L);
+        break;
       }
     }
   }
-    if(String(input.charAt(1)) == "I"){   // Send Identification command
-      SDI12Send(deviceIdentification);
-    }
+  if(String(input.charAt(1)) == "I"){   // Send Identification command
+    SDI12Send(deviceIdentification);
+  }
   
-    if((String(input.charAt(1)) == "R")){       // Continuous Measurements 
-      switch(input.charAt(2)){
-        case 0 
-        continuous_measurements_mcu();
+  if((String(input.charAt(1)) == "R")){       // Continuous Measurements 
+    switch(input.charAt(2)){
+        case 0: 
+          
           break;
-        case 1
-        continuous_measurements_bme();
+        case 1:
+
           break;
-        case 2
-        continuous_measurements_lux();
+        case 2:
+          
           break;
       }
     }
@@ -630,70 +629,31 @@ void change_address(String newAddress){
   deviceAddress = newAddress;
 }
 
-void mcu_sensor_send_data(){
-  SDI12Send(mcu_data);
-}
-
-void bme_sensor_send_data(){
-  SDI12Send(bme_data);
-}
-
-void lux_send_data(){
- SDI12Send(lux_data);
-}
-
-String start_measurement_mcu(){
-  float accel_add = Oaccel.x*Oaccel.x + Oaccel.y*Oaccel.y + Oaccel.z*Oaccel.z;
-  float accel_magnitude = sqrt(accel_add);
-  String a_magnitude = String(accel_magnitude);
-  float magnetometer_add = Omagn.x*Omagn.x + Omagn.y*Omagn.y + Omagn.z*Omagn.z;
-  float magnetometer_magnitude = sqrt(magnetometer_add);
-  String m_magnitude = String(magnetometer_magnitude);
-  float gyrometer_add = Ogyro.x*Ogyro.x + Ogyro.y*Ogyro.y + Ogyro.z*Ogyro.z;
-  float gyrometer_magnitude = sqrt(gyrometer_add);
-  String g_magnitude = String(gyrometer_magnitude);
-  String mcu_data = a_magnitude + "+" +  m_magnitude + "+" + g_magnitude;
-  return mcu_data;
-}
-String start_measurement_bme(){
-  float temp = ReadTemperature();
-  float Ps = ReadPressure();
-  float hum = ReadAltitude();
-  float gas = ReadHumidity()/1000;
-  String bme_data = String(temp) + "+" + String(Ps) + "+" + String(hum) + "+" + String(gas);
-  return bme_data;
-}
-String start_measurent_lux(){
-  float lux = ReadLux();
-  String lux_data = String(lux);
-  return lux_data;
-}
 
 void continuous_measurements_mcu(){
-  float accel_add = Oaccel.x*Oaccel.x + Oaccel.y*Oaccel.y + Oaccel.z*Oaccel.z;
-  float accel_magnitude = sqrt(accel_add);
-  String a_magnitude = String(accel_magnitude);
-  float magnetometer_add = Omagn.x*Omagn.x + Omagn.y*Omagn.y + Omagn.z*Omagn.z;
-  float magnetometer_magnitude = sqrt(magnetometer_add);
-  String m_magnitude = String(magnetometer_magnitude);
-  float gyrometer_add = Ogyro.x*Ogyro.x + Ogyro.y*Ogyro.y + Ogyro.z*Ogyro.z;
-  float gyrometer_magnitude = sqrt(gyrometer_add);
-  String g_magnitude = String(gyrometer_magnitude);
-  String MCU_data = a_magnitude + "+" +  m_magnitude + "+" + g_magnitude;
-  SDI12Send(c_measurements_bme);
+  StartMeasurement();
+  SDI12Send(Amag + "+" + Mmag + "+" + Gmag);
 }
-void continuous_measurements_bme(){
-     float T = bme.temperature;
-     float P = bme.pressure;
-     float H = bme.humidity;
-     float G = bme.gas_resistance/1000.0;  //gas in kilOhms
-     String c_measurements_bme = string(T)+ "+" + string(P)+ "+" + string(H)+ "+" + string(G);  
-     SDI12Send(c_measurements_bme);
-}
+void StartMeasurement(){
+  float Ax = ReadAccelerationX();
+  float Ay = ReadAccelerationY();
+  float Az = ReadAccelerationZ();
+  Amag = String(sqrt(Ax*Ax+Ay*Ay+Az*Az));
 
-void continuous_measurements_lux(){
-    float lux = lightMeter.readLightLevel();
-    String lux_c_measurements = String(lux);
-    SDI12Send(lux_c_measurements);
-}
+  float Gx = ReadGyrometerX();
+  float Gy = ReadGyrometerY();
+  float Gz = ReadGyrometerZ();
+  Gmag =String(sqrt(Gx*Gx+Gy*Gy+Gz*Gz));
 
+  float Mx = ReadMagnetometerX();
+  float My = ReadMagnetometerY();
+  float Mz = ReadMagnetometerZ();
+  Mmag =String(sqrt(Mx*Mx+My*My+Mz*Mz));
+
+  T = String(ReadTemperature());
+  P = String(ReadPressure());
+  H = String(ReadHumidity());
+  A = String(ReadAltitude());
+
+  L = String(ReadLux());
+}
