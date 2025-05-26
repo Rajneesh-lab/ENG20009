@@ -594,13 +594,13 @@ void SDI12Receive(String input) {
   if((String(input.charAt(1)) == "R")){       // Continuous Measurements 
     switch(input.charAt(2)){
         case 0: 
-          
+          continuous_measurements_mcu();
           break;
         case 1:
-
+          continuous_measurements_bme();
           break;
         case 2:
-          
+          continuous_measurements_lux();
           break;
       }
     }
@@ -634,6 +634,17 @@ void continuous_measurements_mcu(){
   StartMeasurement();
   SDI12Send(Amag + "+" + Mmag + "+" + Gmag);
 }
+
+void continuous_measurements_bme(){
+  StartMeasurement();
+  SDI12Send(T + "+" + P + "+" + A + "+" + H);
+}
+
+void continuous_measurements_lux(){
+  StartMeasurement();
+  SDI12Send(L);
+}
+
 void StartMeasurement(){
   float Ax = ReadAccelerationX();
   float Ay = ReadAccelerationY();
