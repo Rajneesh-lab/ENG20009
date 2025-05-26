@@ -1,6 +1,15 @@
+#include <SPI.h>
+#include <Wire.h>
+
 //Scanner for diagnostics
 #include "I2CScanner.h"
 I2CScanner scanner;
+
+//SDI
+String command;
+int deviceAddress = '0'; // default address for project
+String deviceIdentification = "014ENG20009123456789";
+int DIRO = 9;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
 
 //LCD PINS
 #define TFT_CS    10
@@ -36,7 +45,6 @@ String MenuText[] = {
   "Humidity"
 };
 
-//ModeChange
 
 //I2C bus
 #include <Wire.h>
@@ -72,7 +80,7 @@ void DefineButtons(){
 }
 
   
-int DIRO = 9;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
+
 
 bool SetUpErrorFlag = false;
 
@@ -182,7 +190,7 @@ void SetupSensors(){
 
 }
 
-//BME Enviromental sensor
+//###BME### Enviromental sensor
 float ReadTemperature(){
   return BME.readTemperature();
 }
@@ -196,6 +204,7 @@ float ReadHumidity(){
   return BME.readHumidity();
 }
 
+//###MCU###
 //Acceleration
 float ReadAccelerationX(){
   IMU.getAllData(&Omagn, &Ogyro, &Oaccel);
@@ -236,7 +245,7 @@ float ReadGyrometerZ(){
   return Ogyro.z;
 }
 
-//Light Sensor
+//###Light Sensor###
 float ReadLux(){
   DLDR.start();
   //Wait for measurement to be ready
@@ -274,13 +283,6 @@ void ReadAll(){
 
   Serial.println("###DLDR###");
   Serial.println("DLDR " + String(ReadLux()));
-}
-
-void SetupSDI12(){
-  //SDI-12
-  Serial1.begin(1200, SERIAL_7E1);//SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
-  pinMode(DIRO, OUTPUT);//DIRO Pin
-  digitalWrite(DIRO, HIGH);//lsiten
 }
 
 void SetupLCD(){
@@ -323,7 +325,6 @@ void showSensorGraph(int type){
     z = map(ReadMagnetometerZ(), -350, 350, 120, 10);//set graph coords
   } 
   else if (type == 4) {
-    Serial.print(ReadLux());
     int lux = map(ReadLux(), 0, 1000, 120, 20);
     x = lux;//set graph coords
     y = lux;
@@ -472,4 +473,159 @@ void resetMenus(){
   for (int i = 0; i < 8; i++) {
     menuInitialized[i] = false;
   }
+}
+
+
+
+//SDI -12
+
+void SetupSDI12(){
+  //SDI-12
+  Serial1.begin(1200, SERIAL_7E1);//SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
+  pinMode(DIRO, OUTPUT);//DIRO Pin
+  digitalWrite(DIRO, HIGH);//lsiten
+}
+
+
+void PollSDI(){
+  int byte;
+  //Receive SDI-12 over UART and then print to Serial Monitor
+  if(Serial1.available()) {
+    byte = Serial1.read();        //Reads incoming communication in bytes
+    //Serial.println(byte);
+    if (byte == 33) {             //If byte is command terminator (!)
+      SDI12Receive(command);
+      command = "";               //reset command string
+    } else {
+      if (byte != 0) {            //do not add start bit (0)
+      command += char(byte);      //append byte to command string
+      }
+    }
+  }
+}
+
+void SDI12Receive(String input) {
+
+  String address =  String(deviceAddress); 
+  
+  if((String(input.charAt(0)) == "?")){      //Determines if the command is addressed for this device
+    address_query(address);
+  }                                 //address query command
+  if (String(input.charAt(0)) == address) {  
+
+    if((String(input.charAt(1)) == "A")){   // change address command
+      String newAddress = String(input.charAt(2)); 
+      change_address(newAddress);
+    }
+
+    if((String(input.charAt(1)) == "M")){  // start measurement command
+       start_measurement("M");//Why pass a charater?
+    }
+
+    if((String(input.charAt(1)) == "D")){  // send data command
+      switch(input.charAt(2)){
+        case 1:
+          //Acceleration
+          //Mag
+          //Gyro
+          break;
+        case 2:
+          //BME
+          break;
+        case 3:
+          //LUX
+          break;
+        case 4:
+          //RTC
+          break;
+        default:
+          //Nothing or ERROR
+          break;
+      }
+    }
+  }
+    if(String(input.charAt(1)) == "I"){   // Send Identification command
+      SDI12Send(deviceIdentification);
+    }
+    //Need to manage multiple sensors
+    if((String(input.charAt(1)) == "R") && (String(input.charAt(2))) == "0"){  // Continuous Measurements 
+      continuous_measurements(address);
+    }
+}  
+
+void SDI12Send(String message) {
+  Serial.print("message: "); Serial.println(message);
+  
+  digitalWrite(DIRO, LOW);
+  delay(100);
+  Serial1.print(message + String("\r\n"));
+  Serial1.flush();    //wait for print to finish
+  Serial1.end();
+  Serial1.begin(1200, SERIAL_7E1);
+  digitalWrite(DIRO, HIGH);
+  //secondruntoken = 0;
+}
+
+void address_query(String address){
+    SDI12Send("?");
+    Serial.println("Address: " + address);
+}
+
+void change_address(String newAddress){
+  Serial.println("New address = " + newAddress);
+  newAddress.toInt() == deviceAddress;
+}
+
+
+//What does this do?
+
+
+void bme_sensor_send_data(){
+  float temp = ReadTemperature();
+  float Ps = ReadPressure();
+  float hum = ReadAltitude();
+  float gas = ReadHumidity();
+  String data_1 = deviceAddress + "+" + String(temp) + "+" + String(Ps) + "+" + String(hum) + "+" + String(gas);
+  Serial.println(data_1);
+}
+
+void light_sensor_send_data(){
+   float lux = ReadLux();
+   String data_2 = deviceAddress + String(lux);
+   Serial.println(data_2);
+}
+
+void start_measurement(String character){
+    //This should take measurements that are accessed with D!
+    /*
+    SDI12Send(character);
+    String response = "";
+    while (Serial1.available()) {
+    uint16_t x = Serial1.read();
+    response += x;
+    }
+    Serial.println("Response: ");
+    Serial.println(response);
+    */
+}
+
+
+
+void continuous_measurements(String address){
+  //Needs to have addesses of sensors. Does not just dump all sensor info. It allows for a Measurement and data send in one command.
+  /*
+      float T = bme.temperature;
+      float P = bme.pressure;
+      float H = bme.humidity;
+      float G = bme.gas_resistance/1000.0;  //gas in kilOhms
+      float lux = lightMeter.readLightLevel();
+// format exactly: a + T + P + H + G + lux
+      String msg = address
+                   + "+" + String(T,  2)
+                   + "+" + String(P,  2)
+                   + "+" + String(H,  2)
+                   + "+" + String(G,  2)
+                   + "+" + String(lux,2);
+      SDI12Send(msg);
+  */
 }
