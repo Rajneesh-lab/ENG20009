@@ -1,5 +1,14 @@
 #include <SPI.h>
 #include <Wire.h>
+//Stepper
+#include <AccelStepper.h> //Include the AccelStepper library
+#define MP1  51 // IN1 on the ULN2003
+#define MP2  49 // IN2 on the ULN2003
+#define MP3  47 // IN3 on the ULN2003
+#define MP4  45 // IN4 on the ULN2003
+#define MotorInterfaceType 8 // Define the interface type as 8 = 4 wires * step factor (2 for half step)
+AccelStepper stepper = AccelStepper(MotorInterfaceType, MP1, MP3, MP2, MP4);//Define the pin sequence (IN1-IN3-IN2-IN4)
+const int SPR = 2048;//Steps per revolution
 
 //Scanner for diagnostics
 #include "I2CScanner.h"
@@ -90,6 +99,7 @@ void setup(){
   SetupSensors();
   SetupSDI12();
   DefineButtons();
+  StepperSetup();
   SetupLCD();
   Serial.println("--SetUp Complete");
 }
@@ -100,9 +110,23 @@ void loop(){
     PollMenu();
   }
   else{
+    if(ButtonPressed(1)){
+      ToggleStepper();
+    }
   }
 }
 //Functions
+
+void StepperSetup(){
+  stepper.setMaxSpeed(1000);//Set the maximum motor speed in steps per second
+  stepper.setAcceleration(200);//Set the maximum acceleration in steps per second^2
+  Serial.println("--Stepper SetUp--");
+}
+void ToggleStepper(){
+  stepper.move(0.5*SPR); //Set the target motor position (i.e. turn motor for 3 full revolutions)
+  stepper.runToPosition(); // Run the motor to the target position 
+}
+
 bool DataLoggerMode(){
   return digitalRead(53);
 }
@@ -131,23 +155,6 @@ bool ButtonPressed(int buttonN){
   }
 }
 
-void SDI12send(String str){
-  digitalWrite(DIRO, LOW);//Send
-  Serial1.println(str);
-  delay(200);
-  Serial1.flush();
-  SDI12receive();
-}
-String SDI12receive(){
-  digitalWrite(DIRO, HIGH);//Receive
-  String output;
-  Serial1.read(); // Remove first dead char
-  while(Serial1.available()){
-    char c = Serial1.read();
-    output+=c;
-  }
-  return output;
-}
 void SetupSensors(){
   scanner.Init();
   Serial.println();
