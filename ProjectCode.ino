@@ -225,7 +225,7 @@ float ReadMagnetometerX(){
 }
 float ReadMagnetometerY(){
   IMU.getAllData(&Omagn, &Ogyro, &Oaccel);
-  return Omagn.y;
+  return Omagn.y;   
 }
 float ReadMagnetometerZ(){
   IMU.getAllData(&Omagn, &Ogyro, &Oaccel);
@@ -519,21 +519,21 @@ void SDI12Receive(String input) {
     }
 
     if((String(input.charAt(1)) == "M")){  // start measurement command
-       start_measurement("M");//Why pass a charater?
+       start_measurement(); 
     }
 
     if((String(input.charAt(1)) == "D")){  // send data command
       switch(input.charAt(2)){
         case 1:
-          //Acceleration
-          //Mag
-          //Gyro
+         MCU_sensor_send_data(); //Acceleration
+                                      //Mag
+                                  //Gyro
           break;
         case 2:
-          //BME
+         bme_sensor_send_data(); //BME
           break;
         case 3:
-          //LUX
+         lux_send_data(); //LUX
           break;
         case 4:
           //RTC
@@ -548,7 +548,18 @@ void SDI12Receive(String input) {
       SDI12Send(deviceIdentification);
     }
     //Need to manage multiple sensors
-    if((String(input.charAt(1)) == "R") && (String(input.charAt(2))) == "0"){  // Continuous Measurements 
+    if((String(input.charAt(1)) == "R")){       // Continuous Measurements 
+      switch(input.charAt(2)){
+        case 1 
+
+          break;
+        case 2
+
+          break;
+        case 3
+
+          break;
+      }
       continuous_measurements(address);
     }
 }  
@@ -558,15 +569,15 @@ void SDI12Send(String message) {
   
   digitalWrite(DIRO, LOW);
   delay(100);
+  Serial.print(message + String("\r\n")); //diagnostic to serial
   Serial1.print(message + String("\r\n"));
   Serial1.flush();    //wait for print to finish
   Serial1.end();
   Serial1.begin(1200, SERIAL_7E1);
   digitalWrite(DIRO, HIGH);
-  //secondruntoken = 0;
 }
 
-void address_query(String address){
+void address_query(String address){  
     SDI12Send("?");
     Serial.println("Address: " + address);
 }
@@ -579,6 +590,16 @@ void change_address(String newAddress){
 
 //What does this do?
 
+void MCU_sensor_send_data(){
+  float accel_magnitude = Oaccel.x*Oaccel.x + Oaccel.y*Oaccel.y + Oaccel.z*Oaccel.z;
+  String a_magnitude = String(accel_magnitude);
+  float magnetometer_magnitude = Omagn.x*Omagn.x + Omagn.y*Omagn.y + Omagn.z*Omagn.z;
+  String m_magnitude = String(magnetometer_magnitude);
+  float gyrometer_magnitude = Ogyro.x*Ogyro.x + Ogyro.y*Ogyro.y + Ogyro.z*Ogyro.z;
+  String g_magnitude = String(gyrometer_magnitude);
+  String MCU_data = deviceAddress + "+" + a_magnitude + "+" +  m_magnitude + "+" + g_magnitude;
+  Serial.println(MCU_data);
+}
 
 void bme_sensor_send_data(){
   float temp = ReadTemperature();
@@ -589,24 +610,14 @@ void bme_sensor_send_data(){
   Serial.println(data_1);
 }
 
-void light_sensor_send_data(){
+void lux_send_data(){
    float lux = ReadLux();
    String data_2 = deviceAddress + String(lux);
    Serial.println(data_2);
 }
 
-void start_measurement(String character){
-    //This should take measurements that are accessed with D!
-    /*
-    SDI12Send(character);
-    String response = "";
-    while (Serial1.available()) {
-    uint16_t x = Serial1.read();
-    response += x;
-    }
-    Serial.println("Response: ");
-    Serial.println(response);
-    */
+void start_measurement(){
+   SDI12Send("M00028");
 }
 
 
@@ -629,3 +640,14 @@ void continuous_measurements(String address){
       SDI12Send(msg);
   */
 }
+
+void continuous_measurements_bme(String address){
+     float T = bme.temperature;
+     float P = bme.pressure;
+     float H = bme.humidity;
+     float G = bme.gas_resistance/1000.0;  //gas in kilOhms
+     String c_measurements = address + "+" + string(T)+ "+" + string(P)+ "+" + string(H)+ "+" + string(G);
+      
+    
+}
+
