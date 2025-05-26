@@ -110,6 +110,7 @@ void setup(){
 
 
 void loop(){
+  TimerFlagHandler();
   if(DataLoggerMode()){
     PollMenu();
   }
@@ -120,8 +121,28 @@ void loop(){
   }
 }
 //Functions
-void InteruptSetup(){
+void TimerFlagHandler(){
+  if(TimerFlag){
+    TimerFlag = false;
+    if(ReadHumidity()>60){
+    OpenStepper();
+    }
+    else{
+      CloseStepper();
+    }
+  }
+}
+void OpenStepper(){
+  stepper.moveTo(0.5*SPR); //Set the open motor position (i.e. turn motor for 3 full revolutions)
+  stepper.runToPosition(); // Run the motor to the target position
+}
 
+void CloseStepper(){
+  stepper.moveTo(0*SPR); //Set the close motor position (i.e. turn motor for 3 full revolutions)
+  stepper.runToPosition(); // Run the motor to the target position
+}
+
+void InteruptSetup(){
   float freq = 2; //frequency hz
   pmc_set_writeprotect(false);
   pmc_enable_periph_clk(TC3_IRQn);
