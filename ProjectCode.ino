@@ -106,6 +106,7 @@ void setup(){
 
 
 void loop(){
+  TimerFlagHandler();
   if(DataLoggerMode()){
     PollMenu();
   }
@@ -116,6 +117,39 @@ void loop(){
   }
 }
 //Functions
+void TimerFlagHandler(){
+  if(TimerFlag){
+    TimerFlag = false;
+    if(ReadHumidity()>60){
+    OpenStepper();
+    }
+    else{
+      CloseStepper();
+    }
+  }
+}
+void OpenStepper(){
+  stepper.moveTo(0.5*SPR); //Set the open motor position (i.e. turn motor for 3 full revolutions)
+  stepper.runToPosition(); // Run the motor to the target position
+}
+
+void CloseStepper(){
+  stepper.moveTo(0*SPR); //Set the close motor position (i.e. turn motor for 3 full revolutions)
+  stepper.runToPosition(); // Run the motor to the target position
+}
+
+void InteruptSetup(){
+  float freq = 2; //frequency hz
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk(TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC |TC_CMR_TCCLKS_TIMER_CLOCK4); //Sets up Timer1 Channel 0
+  uint32_t rc = VARIANT_MCK / 128 / freq;
+  TC_SetRA(TC1, 0, rc >> 1); // 50% duty cycle square wave
+  TC_SetRC(TC1, 0, rc); //Overflow and Interrupt
+  TC_Start(TC1, 0);
+  TC1->TC_CHANNEL[0].TC_IER=  TC_IER_CPCS | TC_IER_CPAS; //interupt enable register
+  TC1->TC_CHANNEL[0].TC_IDR=~(TC_IER_CPCS | TC_IER_CPAS); //interupt disable register
+  NVIC_EnableIRQ(TC3_IRQn); //enable innterupt handler
 
 void StepperSetup(){
   stepper.setMaxSpeed(1000);//Set the maximum motor speed in steps per second
