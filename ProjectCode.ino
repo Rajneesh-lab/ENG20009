@@ -10,13 +10,16 @@
 AccelStepper stepper = AccelStepper(MotorInterfaceType, MP1, MP3, MP2, MP4);//Define the pin sequence (IN1-IN3-IN2-IN4)
 const int SPR = 2048;//Steps per revolution
 
+//Interupt
+bool TimerFlag = false;
+
 //Scanner for diagnostics
 #include "I2CScanner.h"
 I2CScanner scanner;
 
 //SDI
 String command;
-int deviceAddress = '0'; // default address for project
+int deviceAddress = 0; // default address for project
 String deviceIdentification = "014ENG20009123456789";
 int DIRO = 9;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
 
@@ -95,6 +98,7 @@ bool SetUpErrorFlag = false;
 
 void setup(){
   Serial.begin(9600);
+  InteruptSetup()
   Wire.begin();
   SetupSensors();
   SetupSDI12();
@@ -116,12 +120,30 @@ void loop(){
   }
 }
 //Functions
+void InteruptSetup(){
 
+  float freq = 2; //frequency hz
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk(TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC |TC_CMR_TCCLKS_TIMER_CLOCK4); //Sets up Timer1 Channel 0
+  uint32_t rc = VARIANT_MCK / 128 / freq;
+  TC_SetRA(TC1, 0, rc >> 1); // 50% duty cycle square wave
+  TC_SetRC(TC1, 0, rc); //Overflow and Interrupt
+  TC_Start(TC1, 0);
+  TC1->TC_CHANNEL[0].TC_IER=  TC_IER_CPCS | TC_IER_CPAS; //interupt enable register
+  TC1->TC_CHANNEL[0].TC_IDR=~(TC_IER_CPCS | TC_IER_CPAS); //interupt disable register
+  NVIC_EnableIRQ(TC3_IRQn); //enable innterupt handler
+
+}
+void TC3_Handler(){
+  TimerFlag = true;
+}
 void StepperSetup(){
   stepper.setMaxSpeed(1000);//Set the maximum motor speed in steps per second
   stepper.setAcceleration(200);//Set the maximum acceleration in steps per second^2
   Serial.println("--Stepper SetUp--");
 }
+
 void ToggleStepper(){
   stepper.move(0.5*SPR); //Set the target motor position (i.e. turn motor for 3 full revolutions)
   stepper.runToPosition(); // Run the motor to the target position 
@@ -657,4 +679,3 @@ void continuous_measurements_bme(String address){
       
     
 }
-
