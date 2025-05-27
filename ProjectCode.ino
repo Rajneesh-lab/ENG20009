@@ -18,17 +18,19 @@ I2CScanner scanner;
 
 //SDI
 String command;
-String deviceAddress = "0"; // default address for project
+String DeviceAddress = "0"; // default address for project
 String deviceIdentification = "014ENG20009123456789";
 int DIRO = 9;//pin that controls the input/output state SDI adaptor. HIGH receives and low sends from arduino
-String T; //Temp
-String P; //pressure
-String A; //Altitude
-String H; //humidity
-String L;
-String Amag;
-String Gmag;
-String Mmag;
+
+
+String T = "0.0"; //Temp
+String P = "0.0"; //pressure
+String A = "0.0"; //Altitude
+String H = "0.0"; //humidity
+String L = "0.0"; //LUX
+String Amag = "0.0"; //Accel Magnitude
+String Gmag = "0.0"; //gyro Magnitude
+String Mmag = "0.0"; //Mag Magnitude
 
 
 //LCD PINS
@@ -92,7 +94,7 @@ Adafruit_BME280 BME;
 #define SeaLevel_HPA (1013.25)
 
 //Button Pin allocation:
-void DefineButtons(){
+void SetupButtons(){
   pinMode(2, INPUT_PULLUP);
   pinMode(3, INPUT_PULLUP);
   pinMode(4, INPUT_PULLUP);
@@ -107,13 +109,15 @@ bool SetUpErrorFlag = false;
 void setup(){
   Serial.begin(9600);
   Wire.begin();
+
   SetupSensors();
   SetupSDI12();
-  DefineButtons();
-  StepperSetup();
+  SetupButtons();
+  SetupStepper();
   SetupLCD();
-  Serial.println("--SetUp Complete");
-  InteruptSetup();
+  SetupInterupt();
+
+  Serial.println("|--SetUp Complete--|");
 }
 
 
@@ -124,6 +128,7 @@ void loop(){
     PollMenu();
   }
   else{
+    PollSDI();
     }
 }
 //Functions
@@ -136,7 +141,7 @@ void TimerFlagHandler(){
   if(TimerFlag){
     TimerFlag = false;
     if(ReadHumidity()<60){
-    OpenStepper();
+      OpenStepper();
     }
     else{
       CloseStepper();
@@ -144,7 +149,7 @@ void TimerFlagHandler(){
   }
 }
 void OpenStepper(){
-  stepper.moveTo(0.5*SPR); //Set the open motor position (i.e. turn motor for 3 full revolutions)
+  stepper.moveTo(-0.5*SPR); //Set the open motor position (i.e. turn motor for 3 full revolutions)
   stepper.runToPosition(); // Run the motor to the target position
 }
 
@@ -153,7 +158,7 @@ void CloseStepper(){
   stepper.runToPosition(); // Run the motor to the target position
 }
 
-void InteruptSetup(){
+void SetupInterupt(){
   float freq = 2; //frequency hz
   pmc_set_writeprotect(false);
   pmc_enable_periph_clk(TC3_IRQn);
@@ -165,8 +170,9 @@ void InteruptSetup(){
   TC1->TC_CHANNEL[0].TC_IER=  TC_IER_CPCS | TC_IER_CPAS; //interupt enable register
   TC1->TC_CHANNEL[0].TC_IDR=~(TC_IER_CPCS | TC_IER_CPAS); //interupt disable register
   NVIC_EnableIRQ(TC3_IRQn); //enable innterupt handler
+  Serial.println("--ISR Setup--");
 }
-void StepperSetup(){
+void SetupStepper(){
   stepper.setMaxSpeed(1000);//Set the maximum motor speed in steps per second
   stepper.setAcceleration(200);//Set the maximum acceleration in steps per second^2
   Serial.println("--Stepper SetUp--");
@@ -307,6 +313,7 @@ float ReadLux(){
 }
 
 //Diagnostic to check all sensors
+/*
 void ReadAll(){
   Serial.println("###BME###");
   delay(300);
@@ -336,6 +343,7 @@ void ReadAll(){
   Serial.println("###DLDR###");
   Serial.println("DLDR " + String(ReadLux()));
 }
+*/
 
 void SetupLCD(){
   tft.initR(INITR_BLACKTAB);
@@ -404,7 +412,7 @@ void showSensorGraph(int type){
     int humid = map(ReadHumidity(), 0, 100, 120, 20);
     x = humid;
     y = humid;
-    z = humid;
+    z = 60;
   }
 
   if (!menuInitialized[type]) {
@@ -557,32 +565,33 @@ void PollSDI(){
 }
 
 void SDI12Receive(String input) {
-
-  String address =  String(deviceAddress); 
-  
+  Serial.println("IN : " + input);
   if((String(input.charAt(0)) == "?")){      //Determines if the command is addressed for this device
-    address_query(address);
+    SDI12Send("");
   }                                 //address query command
-  if (String(input.charAt(0)) == address) {  
+  if (String(input.charAt(0)) == DeviceAddress) {  
     if((String(input.charAt(1)) == "A")){   // change address command
-      String newAddress = String(input.charAt(2)); 
-      change_address(newAddress);
+      DeviceAddress = String(input.charAt(2)); 
+      SDI12Send("");
     }
     if((String(input.charAt(1)) == "M")){  // start measurement command
-    SDI12Send("M00028");
+    SDI12Send("0003"); // 000 seconds for data collection. 3 Parameters.
     StartMeasurement();
-  }
+    }
 
-  if((String(input.charAt(1)) == "D")){  // send data command
-    switch(input.charAt(2)){
-      case 0:
-        SDI12Send(Amag + "+" + Mmag + "+" + Gmag);
-        break;
-      case 1:
-        SDI12Send(T + "+" + P + "+" + A + "+" + H);
-        break;
-      case 2:
-        SDI12Send(L);
+    if((String(input.charAt(1)) == "D")){  // send data command
+      switch(input.charAt(2)){
+        case '0':
+          SDI12Send(Amag + "+" + Mmag + "+" + Gmag);
+          break;
+        case '1':
+          SDI12Send(T + "+" + P + "+" + A + "+" + H);
+          break;
+        case '2':
+          SDI12Send(L);
+          break;
+        default:
+          SDI12Send("");
         break;
       }
     }
@@ -593,42 +602,33 @@ void SDI12Receive(String input) {
   
   if((String(input.charAt(1)) == "R")){       // Continuous Measurements 
     switch(input.charAt(2)){
-        case 0: 
+        case '0': 
           continuous_measurements_mcu();
           break;
-        case 1:
+        case '1':
           continuous_measurements_bme();
           break;
-        case 2:
+        case '2':
           continuous_measurements_lux();
+          break;
+        default:
+          SDI12Send("");
           break;
       }
     }
 }  
 
 void SDI12Send(String message) {
-  String address = String(deviceAddress);
-  Serial.print("message: "); Serial.println(message);
+  String address = String(DeviceAddress);
   digitalWrite(DIRO, LOW);
   delay(100);
-  Serial.print(address + "+" + message + String("\r\n")); //diagnostic to serial
-  Serial1.print(address + "+" + message + String("\r\n"));
+  Serial.println("OUT: " + address + message + String("\r\n"));
+  Serial1.print(address + message + String("\r\n"));
   Serial1.flush();    //wait for print to finish
   Serial1.end();
   Serial1.begin(1200, SERIAL_7E1);
   digitalWrite(DIRO, HIGH);
 }
-
-void address_query(String address){  
-    SDI12Send("?");
-    Serial.println("Address: " + address);
-}
-
-void change_address(String newAddress){
-  Serial.println("New address = " + newAddress);
-  deviceAddress = newAddress;
-}
-
 
 void continuous_measurements_mcu(){
   StartMeasurement();
@@ -650,7 +650,7 @@ void StartMeasurement(){
   float Ay = ReadAccelerationY();
   float Az = ReadAccelerationZ();
   Amag = String(sqrt(Ax*Ax+Ay*Ay+Az*Az));
-
+  
   float Gx = ReadGyrometerX();
   float Gy = ReadGyrometerY();
   float Gz = ReadGyrometerZ();
