@@ -10,7 +10,24 @@
 AccelStepper stepper = AccelStepper(MotorInterfaceType, MP1, MP3, MP2, MP4);//Define the pin sequence (IN1-IN3-IN2-IN4)
 const int SPR = 2048;//Steps per revolution
 
+//RTC
+#include "RTClib.h" 
+
 //SD
+#include "SdFat.h"
+//define file system for sd card
+SdFs sd;
+FsFile file;
+// Chip select may be constant or RAM variable.
+const uint8_t SD_CS_PIN = A3;
+// Pin numbers in templates must be constants.
+const uint8_t SOFT_MISO_PIN = 12;
+const uint8_t SOFT_MOSI_PIN = 11;
+const uint8_t SOFT_SCK_PIN  = 13;
+// SdFat software SPI template
+SoftSpiDriver<SOFT_MISO_PIN, SOFT_MOSI_PIN, SOFT_SCK_PIN> softSpi;
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(0), &softSpi)
+String Datatype;
 
 //Scanner for diagnostics
 #include "I2CScanner.h"
@@ -109,12 +126,12 @@ bool SetUpErrorFlag = false;
 void setup(){
   Serial.begin(9600);
   Wire.begin();
-
   SetupSensors();
   SetupSDI12();
   SetupButtons();
   SetupStepper();
   SetupLCD();
+  SetupSD();
   SetupInterupt();
 
   Serial.println("|--SetUp Complete--|");
@@ -132,6 +149,57 @@ void loop(){
     }
 }
 //Functions
+void SetupSD(){
+  if (!sd.begin(SD_CONFIG)) {
+    Serial.println("SD card initialization failed!");
+    sd.initErrorHalt();
+  }
+  else{
+    file.open("LoggerFile.txt", O_RDWR | O_CREAT);
+    file.close();
+    Serial.print("--SD Setup--");
+  }
+}
+void LogVariable(int type, float Value1, float Value2, float Value3) {  
+  now = rtc.now();
+  switch(type){
+    case 1:
+      Datatype = "Accelerometer ";
+      break;
+    case 2:
+      Datatype = "Gyroscope ";
+      break;
+    case 3:
+      Datatype = "Magnetometer ";
+      break;
+    case 4:
+      Datatype = "Light ";
+      break;
+    case 5:
+      Datatype = "Temperature ";
+      break;
+    case 6:
+      Datatype = "Pressure ";
+      break;
+    case 7:
+      Datatype = "Altitude ";
+      break;
+    case 8:
+      Datatype = "Humidity ";
+      break;
+    default:
+      Datatype = "UNKNOWN ";
+      break;
+
+  }
+  file.open("LoggerFile.txt", O_RDWR);
+  file.seekEnd();
+  file.println("<"+ String(now.year()) + "/" +String(now.month())+ "/" + String(now.day())+ "/" + String(now.hour())+ "/" + String(now.minute())+ "/" + String(now.second()) + "> " + Datatype + String(Value1) + "|" + String(Value2)+ "|" + String(Value3));
+  file.close();
+}
+
+
+
 
 void TC3_Handler(){
   TC_GetStatus(TC1, 0);
@@ -410,10 +478,12 @@ void showSensorGraph(int type){
   } 
   else if (type == 8) {
     int humid = map(ReadHumidity(), 0, 100, 120, 20);
-    x = humid;
-    y = humid;
-    z = 60;
+    x = 60;
+    y = 0;
+    z = humid;
   }
+  
+  LogVariable(type,x,y,z);
 
   if (!menuInitialized[type]) {
     tft.fillScreen(ST77XX_BLACK);
