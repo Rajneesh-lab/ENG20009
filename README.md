@@ -1,10 +1,9 @@
-//Add this at the top (global variables)://
+//Add this at the top (global variables):
 bool alertLogged = false;
 unsigned long lastAlertTime = 0;
 const unsigned long alertCooldown = 30000; // 30 seconds cooldown
 
-
-//Then update TimerFlagHandler() like this://
+//Then update TimerFlagHandler() like this:
 void TimerFlagHandler(){
   if (TimerFlag){
     TimerFlag = false;
